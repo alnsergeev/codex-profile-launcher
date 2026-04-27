@@ -4,7 +4,7 @@
 
 Its main value is simple: it makes the **Codex Desktop GUI** practical to use with a **local Ollama setup** or another self-hosted OpenAI-compatible endpoint, without manually editing `config.toml` every time you switch.
 
-It reads profile definitions from Codex `config.toml`, shows one launch button per profile, saves the selected profile as the active default, and launches or restarts Codex Desktop.
+It reads profile definitions from Codex `config.toml`, can append basic profile and model provider sections, saves the selected profile as the active default, and launches or restarts Codex Desktop.
 
 The goal is intentionally narrow: a fast, local, practical Windows UI utility for switching Codex profiles so that Codex Desktop can be used comfortably as a GUI for both OpenAI-hosted and local/self-hosted models.
 
@@ -17,7 +17,7 @@ A common use case is running **Codex Desktop as a GUI** while switching between:
 
 Codex Desktop supports this through profile-driven configuration in `config.toml`, but switching that setup is not currently exposed as a first-class desktop UI flow.
 
-If you use Codex Desktop with both cloud and local model backends, editing `config.toml` by hand gets old quickly. This launcher removes that friction without becoming a full configuration manager.
+If you use Codex Desktop with both cloud and local model backends, editing `config.toml` by hand gets old quickly. This launcher removes that friction with a small set of targeted `config.toml` edits, without becoming a full configuration manager.
 
 ## What it does
 
@@ -35,8 +35,8 @@ If you use Codex Desktop with both cloud and local model backends, editing `conf
 
 ## What it does not do
 
-- It does not edit profile contents.
-- It does not edit model provider contents after creation.
+- It does not provide a general-purpose editor for arbitrary existing profile fields.
+- It does not provide a general-purpose editor for arbitrary existing model provider fields.
 - It does not create advanced nested provider config for you.
 - It does not add telemetry, networking, or cloud services.
 - It is not cross-platform.
@@ -81,10 +81,10 @@ The launcher looks for:
 
 ## Safety
 
-When switching profiles, the launcher:
+When updating config, the launcher:
 
 1. Reads the current `config.toml`.
-2. Updates only the top-level `profile = "..."` setting.
+2. Updates the top-level `profile = "..."` setting or appends a basic `[profiles.*]` / `[model_providers.*]` section.
 3. Writes the new content to a temporary file in the same folder.
 4. Replaces the original file using `File.Replace`.
 5. Creates a timestamped backup such as `config.toml.20260423120000.bak`.
