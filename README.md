@@ -24,6 +24,8 @@ If you use Codex Desktop with both cloud and local model backends, editing `conf
 - Reads the active profile from top-level `profile = "..."`.
 - Reads available profiles from `[profiles.<name>]`.
 - Shows one button per profile.
+- Can create a basic `[profiles.<name>]` section from the UI.
+- Can create a basic `[model_providers.<name>]` section from the UI.
 - Highlights the current profile.
 - Safely updates the active `profile`.
 - Creates a timestamped backup before modifying `config.toml`.
@@ -34,8 +36,8 @@ If you use Codex Desktop with both cloud and local model backends, editing `conf
 ## What it does not do
 
 - It does not edit profile contents.
-- It does not manage model providers.
-- It does not create Codex profiles for you.
+- It does not edit model provider contents after creation.
+- It does not create advanced nested provider config for you.
 - It does not add telemetry, networking, or cloud services.
 - It is not cross-platform.
 - It is not intended to replace Codex Desktop settings.

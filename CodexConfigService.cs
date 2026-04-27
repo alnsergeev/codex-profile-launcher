@@ -7,6 +7,7 @@ public sealed class CodexConfigService
 {
     private static readonly Regex SectionRegex = new(@"^\s*\[\s*([^\]]+?)\s*\]\s*$", RegexOptions.Compiled);
     private static readonly Regex KeyValueRegex = new(@"^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$", RegexOptions.Compiled);
+    private static readonly Regex ProfileKeyRegex = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled);
 
     private readonly string _configPath;
 
@@ -16,6 +17,18 @@ public sealed class CodexConfigService
     }
 
     public string ConfigPath => _configPath;
+
+    public static bool IsValidProfileKey(string? profileKey)
+    {
+        return !string.IsNullOrWhiteSpace(profileKey)
+            && ProfileKeyRegex.IsMatch(profileKey.Trim());
+    }
+
+    public static bool IsValidModelProviderKey(string? providerKey)
+    {
+        return !string.IsNullOrWhiteSpace(providerKey)
+            && ProfileKeyRegex.IsMatch(providerKey.Trim());
+    }
 
     public CodexConfigSnapshot Load()
     {
@@ -188,6 +201,30 @@ public sealed class CodexConfigService
         SafeReplace(updatedText);
     }
 
+    public void AddProfile(NewCodexProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var originalText = File.Exists(_configPath)
+            ? File.ReadAllText(_configPath, Encoding.UTF8)
+            : string.Empty;
+
+        var updatedText = AddProfileText(originalText, profile);
+        WriteConfig(updatedText);
+    }
+
+    public void AddModelProvider(NewCodexModelProvider modelProvider)
+    {
+        ArgumentNullException.ThrowIfNull(modelProvider);
+
+        var originalText = File.Exists(_configPath)
+            ? File.ReadAllText(_configPath, Encoding.UTF8)
+            : string.Empty;
+
+        var updatedText = AddModelProviderText(originalText, modelProvider);
+        WriteConfig(updatedText);
+    }
+
     public static string UpdateActiveProfileText(string configText, string profileName)
     {
         var lines = SplitLines(configText);
@@ -206,6 +243,63 @@ public sealed class CodexConfigService
         }
 
         return string.Join(newline, lines);
+    }
+
+    public static string AddProfileText(string configText, NewCodexProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var normalizedProfile = NormalizeProfile(profile);
+        ValidateNewProfile(normalizedProfile);
+
+        var snapshot = Parse("config.toml", configText);
+        if (snapshot.Profiles.Any(existing => existing.Key.Equals(normalizedProfile.Key, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Profile '{normalizedProfile.Key}' already exists in config.toml.");
+        }
+
+        var updatedText = normalizedProfile.SetAsActive
+            ? UpdateActiveProfileText(configText, normalizedProfile.Key)
+            : configText;
+
+        var newline = DetectNewlineOrDefault(updatedText);
+        var builder = new StringBuilder(updatedText.TrimEnd('\r', '\n'));
+
+        if (builder.Length > 0)
+        {
+            builder.Append(newline);
+            builder.Append(newline);
+        }
+
+        builder.Append(BuildProfileSection(normalizedProfile, newline));
+        builder.Append(newline);
+        return builder.ToString();
+    }
+
+    public static string AddModelProviderText(string configText, NewCodexModelProvider modelProvider)
+    {
+        ArgumentNullException.ThrowIfNull(modelProvider);
+
+        var normalizedModelProvider = NormalizeModelProvider(modelProvider);
+        ValidateNewModelProvider(normalizedModelProvider);
+
+        if (SectionExists(configText, $"model_providers.{normalizedModelProvider.Key}"))
+        {
+            throw new InvalidOperationException($"Model provider '{normalizedModelProvider.Key}' already exists in config.toml.");
+        }
+
+        var newline = DetectNewlineOrDefault(configText);
+        var builder = new StringBuilder(configText.TrimEnd('\r', '\n'));
+
+        if (builder.Length > 0)
+        {
+            builder.Append(newline);
+            builder.Append(newline);
+        }
+
+        builder.Append(BuildModelProviderSection(normalizedModelProvider, newline));
+        builder.Append(newline);
+        return builder.ToString();
     }
 
     public static string ResolveDefaultConfigPath()
@@ -251,6 +345,146 @@ public sealed class CodexConfigService
 
             throw;
         }
+    }
+
+    private void WriteConfig(string updatedText)
+    {
+        var directory = Path.GetDirectoryName(_configPath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            throw new InvalidOperationException("Could not determine the config directory.");
+        }
+
+        Directory.CreateDirectory(directory);
+
+        if (File.Exists(_configPath))
+        {
+            SafeReplace(updatedText);
+            return;
+        }
+
+        File.WriteAllText(_configPath, updatedText, Encoding.UTF8);
+    }
+
+    private static NewCodexProfile NormalizeProfile(NewCodexProfile profile)
+    {
+        return profile with
+        {
+            Key = profile.Key.Trim(),
+            DisplayName = NormalizeOptional(profile.DisplayName),
+            Model = profile.Model.Trim(),
+            ModelProvider = NormalizeOptional(profile.ModelProvider),
+            ModelReasoningEffort = NormalizeOptional(profile.ModelReasoningEffort),
+        };
+    }
+
+    private static NewCodexModelProvider NormalizeModelProvider(NewCodexModelProvider modelProvider)
+    {
+        return modelProvider with
+        {
+            Key = modelProvider.Key.Trim(),
+            DisplayName = NormalizeOptional(modelProvider.DisplayName),
+            BaseUrl = modelProvider.BaseUrl.Trim(),
+            WireApi = modelProvider.WireApi.Trim(),
+        };
+    }
+
+    private static void ValidateNewProfile(NewCodexProfile profile)
+    {
+        if (!IsValidProfileKey(profile.Key))
+        {
+            throw new ArgumentException("Profile key must use only letters, numbers, '.', '_' or '-'.", nameof(profile));
+        }
+
+        if (string.IsNullOrWhiteSpace(profile.Model))
+        {
+            throw new ArgumentException("Model is required.", nameof(profile));
+        }
+    }
+
+    private static void ValidateNewModelProvider(NewCodexModelProvider modelProvider)
+    {
+        if (!IsValidModelProviderKey(modelProvider.Key))
+        {
+            throw new ArgumentException("Model provider key must use only letters, numbers, '.', '_' or '-'.", nameof(modelProvider));
+        }
+
+        if (!Uri.TryCreate(modelProvider.BaseUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("Base URL must be a valid absolute http or https URL.", nameof(modelProvider));
+        }
+
+        if (string.IsNullOrWhiteSpace(modelProvider.WireApi))
+        {
+            throw new ArgumentException("Wire API is required.", nameof(modelProvider));
+        }
+    }
+
+    private static string BuildProfileSection(NewCodexProfile profile, string newline)
+    {
+        var lines = new List<string>
+        {
+            $"[profiles.{profile.Key}]"
+        };
+
+        if (!string.IsNullOrWhiteSpace(profile.DisplayName))
+        {
+            lines.Add($"name = \"{EscapeTomlString(profile.DisplayName)}\"");
+        }
+
+        lines.Add($"model = \"{EscapeTomlString(profile.Model)}\"");
+
+        if (!string.IsNullOrWhiteSpace(profile.ModelProvider))
+        {
+            lines.Add($"model_provider = \"{EscapeTomlString(profile.ModelProvider)}\"");
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.ModelReasoningEffort))
+        {
+            lines.Add($"model_reasoning_effort = \"{EscapeTomlString(profile.ModelReasoningEffort)}\"");
+        }
+
+        return string.Join(newline, lines);
+    }
+
+    private static string BuildModelProviderSection(NewCodexModelProvider modelProvider, string newline)
+    {
+        var lines = new List<string>
+        {
+            $"[model_providers.{modelProvider.Key}]",
+            $"name = \"{EscapeTomlString(modelProvider.DisplayNameOrKey)}\"",
+            $"base_url = \"{EscapeTomlString(modelProvider.BaseUrl)}\"",
+            $"wire_api = \"{EscapeTomlString(modelProvider.WireApi)}\"",
+        };
+
+        return string.Join(newline, lines);
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool SectionExists(string configText, string sectionName)
+    {
+        foreach (var line in SplitLines(configText))
+        {
+            var lineWithoutComment = StripTrailingComment(line).Trim();
+            if (lineWithoutComment.Length == 0)
+            {
+                continue;
+            }
+
+            var sectionMatch = SectionRegex.Match(lineWithoutComment);
+            if (sectionMatch.Success
+                && sectionMatch.Groups[1].Value.Trim().Equals(sectionName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int FindTopLevelProfileLine(IReadOnlyList<string> lines)
@@ -365,5 +599,10 @@ public sealed class CodexConfigService
     private static string DetectNewline(string text)
     {
         return text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+    }
+
+    private static string DetectNewlineOrDefault(string text)
+    {
+        return text.Length == 0 ? Environment.NewLine : DetectNewline(text);
     }
 }

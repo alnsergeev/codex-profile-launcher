@@ -9,6 +9,7 @@ public sealed class MainForm : Form
     private readonly Label _hintLabel;
     private readonly Label _warningLabel;
     private readonly FlowLayoutPanel _buttonPanel;
+    private readonly Button _addProfileButton;
     private readonly Button _reloadButton;
     private readonly Button _openConfigButton;
     private readonly Button _openConfigFolderButton;
@@ -25,8 +26,8 @@ public sealed class MainForm : Form
         MaximizeBox = true;
         MinimizeBox = true;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(820, 520);
-        MinimumSize = new Size(760, 480);
+        ClientSize = new Size(1160, 560);
+        MinimumSize = new Size(1120, 520);
 
         var titleLabel = new Label
         {
@@ -39,15 +40,15 @@ public sealed class MainForm : Form
         _hintLabel = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(760, 0),
-            Text = "Click a profile to save it as the active default and launch Codex with that profile.",
+            MaximumSize = new Size(1100, 0),
+            Text = "Click a profile to save it as the active default and launch Codex with that profile, or add a new profile first.",
             Margin = new Padding(0, 0, 0, 14),
         };
 
         _configPathLabel = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(760, 0),
+            MaximumSize = new Size(1100, 0),
             Margin = new Padding(0, 0, 0, 6),
         };
 
@@ -62,17 +63,20 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             ForeColor = Color.DarkGoldenrod,
-            MaximumSize = new Size(760, 0),
+            MaximumSize = new Size(1100, 0),
             Margin = new Padding(0, 0, 0, 12),
         };
+
+        _addProfileButton = CreateActionButton("Add new profile");
+        _addProfileButton.Click += (_, _) => AddProfile();
 
         _reloadButton = CreateActionButton("Refresh profiles");
         _reloadButton.Click += (_, _) => ReloadProfiles();
 
-        _openConfigButton = CreateActionButton("Open config.toml");
+        _openConfigButton = CreateActionButton("Open config.toml file");
         _openConfigButton.Click += (_, _) => OpenConfigFile();
 
-        _openConfigFolderButton = CreateActionButton("Open config folder");
+        _openConfigFolderButton = CreateActionButton("Open folder with config.toml");
         _openConfigFolderButton.Click += (_, _) => OpenConfigFolder();
 
         _copyConfigPathButton = CreateActionButton("Copy config path");
@@ -87,6 +91,7 @@ public sealed class MainForm : Form
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
+        actionPanel.Controls.Add(_addProfileButton);
         actionPanel.Controls.Add(_reloadButton);
         actionPanel.Controls.Add(_openConfigButton);
         actionPanel.Controls.Add(_openConfigFolderButton);
@@ -136,7 +141,7 @@ public sealed class MainForm : Form
         return new Button
         {
             AutoSize = false,
-            Width = 150,
+            Width = 210,
             Height = 36,
             Text = text,
             Margin = new Padding(0, 0, 10, 12),
@@ -158,14 +163,14 @@ public sealed class MainForm : Form
 
         if (!snapshot.Exists)
         {
-            ShowEmptyState("config.toml was not found. Use Open config folder to inspect the expected location.");
+            ShowEmptyState("config.toml was not found. Use Open folder with config.toml to inspect the expected location.");
             _buttonPanel.ResumeLayout();
             return;
         }
 
         if (snapshot.Profiles.Count == 0)
         {
-            ShowEmptyState("No profiles were found. Add [profiles.<name>] sections to config.toml, then refresh.");
+            ShowEmptyState("No profiles were found. Use Add new profile or add [profiles.<name>] sections to config.toml, then refresh.");
             _buttonPanel.ResumeLayout();
             return;
         }
@@ -305,6 +310,35 @@ public sealed class MainForm : Form
     {
         Clipboard.SetText(_configService.ConfigPath);
         ShowStatus("Copied config path to clipboard.");
+    }
+
+    private void AddProfile()
+    {
+        using var dialog = new AddProfileForm(_configService);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.ProfileRequest is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _configService.AddProfile(dialog.ProfileRequest);
+            ReloadProfiles();
+
+            var message = dialog.ProfileRequest.SetAsActive
+                ? $"Added '{dialog.ProfileRequest.DisplayNameOrKey}' and set it as the current profile."
+                : $"Added '{dialog.ProfileRequest.DisplayNameOrKey}'.";
+
+            ShowStatus(message);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                ex.Message,
+                "Add profile failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private static void StartShellPath(string path, string errorMessage)

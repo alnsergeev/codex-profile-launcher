@@ -7,7 +7,13 @@ var tests = new (string Name, Action Test)[]
     ("Warns when profile is missing", WarnsWhenProfileIsMissing),
     ("Ignores duplicate profiles in button list", IgnoresDuplicateProfiles),
     ("Updates active profile without dropping comments", UpdatesActiveProfileText),
+    ("Adds a new profile section without dropping config", AddsProfileText),
+    ("Rejects duplicate profile keys when adding", RejectsDuplicateProfileKeys),
+    ("Adds a new model provider section without dropping config", AddsModelProviderText),
+    ("Rejects duplicate model provider keys when adding", RejectsDuplicateModelProviderKeys),
     ("Safely updates file and creates backup", SafelyUpdatesFileAndCreatesBackup),
+    ("Creates config when adding a first profile", CreatesConfigWhenAddingFirstProfile),
+    ("Creates config when adding a first model provider", CreatesConfigWhenAddingFirstModelProvider),
 };
 
 var failed = 0;
@@ -117,6 +123,106 @@ static void UpdatesActiveProfileText()
     Contains("[profiles.openai]", updated);
 }
 
+static void AddsProfileText()
+{
+    var updated = CodexConfigService.AddProfileText(
+        """
+        profile = "openai"
+
+        [profiles.openai]
+        model = "gpt-5.4"
+
+        [model_providers.remote_ollama]
+        base_url = "http://localhost:11434/v1"
+        """,
+        new NewCodexProfile(
+            "ollama",
+            "Remote Ollama",
+            "qwen3:latest",
+            "remote_ollama",
+            "medium",
+            SetAsActive: true));
+
+    Contains("profile = \"ollama\"", updated);
+    Contains("[profiles.ollama]", updated);
+    Contains("name = \"Remote Ollama\"", updated);
+    Contains("model = \"qwen3:latest\"", updated);
+    Contains("model_provider = \"remote_ollama\"", updated);
+    Contains("model_reasoning_effort = \"medium\"", updated);
+    Contains("[model_providers.remote_ollama]", updated);
+}
+
+static void RejectsDuplicateProfileKeys()
+{
+    try
+    {
+        CodexConfigService.AddProfileText(
+            """
+            [profiles.openai]
+            model = "gpt-5.4"
+            """,
+            new NewCodexProfile(
+                "openai",
+                null,
+                "gpt-5.4",
+                null,
+                null,
+                SetAsActive: false));
+    }
+    catch (InvalidOperationException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException("Expected duplicate profile keys to be rejected.");
+}
+
+static void AddsModelProviderText()
+{
+    var updated = CodexConfigService.AddModelProviderText(
+        """
+        profile = "openai"
+
+        [profiles.openai]
+        model = "gpt-5.4"
+        """,
+        new NewCodexModelProvider(
+            "remote_ollama",
+            "Remote Ollama",
+            "http://localhost:11434/v1",
+            "responses"));
+
+    Contains("[profiles.openai]", updated);
+    Contains("[model_providers.remote_ollama]", updated);
+    Contains("name = \"Remote Ollama\"", updated);
+    Contains("base_url = \"http://localhost:11434/v1\"", updated);
+    Contains("wire_api = \"responses\"", updated);
+}
+
+static void RejectsDuplicateModelProviderKeys()
+{
+    try
+    {
+        CodexConfigService.AddModelProviderText(
+            """
+            [model_providers.remote_ollama]
+            base_url = "http://localhost:11434/v1"
+            wire_api = "responses"
+            """,
+            new NewCodexModelProvider(
+                "remote_ollama",
+                null,
+                "http://localhost:8080/v1",
+                "responses"));
+    }
+    catch (InvalidOperationException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException("Expected duplicate model provider keys to be rejected.");
+}
+
 static void SafelyUpdatesFileAndCreatesBackup()
 {
     var directory = Path.Combine(Path.GetTempPath(), $"codex-profile-launcher-tests-{Guid.NewGuid():N}");
@@ -149,6 +255,63 @@ static void SafelyUpdatesFileAndCreatesBackup()
     }
 }
 
+static void CreatesConfigWhenAddingFirstProfile()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"codex-profile-launcher-tests-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+
+    try
+    {
+        var configPath = Path.Combine(directory, "config.toml");
+        var service = new CodexConfigService(configPath);
+
+        service.AddProfile(new NewCodexProfile(
+            "ollama",
+            "Remote Ollama",
+            "qwen3:latest",
+            "remote_ollama",
+            null,
+            SetAsActive: true));
+
+        var text = File.ReadAllText(configPath);
+        Contains("profile = \"ollama\"", text);
+        Contains("[profiles.ollama]", text);
+        Contains("model_provider = \"remote_ollama\"", text);
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static void CreatesConfigWhenAddingFirstModelProvider()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"codex-profile-launcher-tests-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+
+    try
+    {
+        var configPath = Path.Combine(directory, "config.toml");
+        var service = new CodexConfigService(configPath);
+
+        service.AddModelProvider(new NewCodexModelProvider(
+            "remote_ollama",
+            "Remote Ollama",
+            "http://localhost:11434/v1",
+            "responses"));
+
+        var text = File.ReadAllText(configPath);
+        Contains("[model_providers.remote_ollama]", text);
+        Contains("name = \"Remote Ollama\"", text);
+        Contains("base_url = \"http://localhost:11434/v1\"", text);
+        Contains("wire_api = \"responses\"", text);
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
 static void Equal<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -172,3 +335,4 @@ static void Contains(string expected, string actual)
         throw new InvalidOperationException($"Expected text to contain '{expected}'.");
     }
 }
+
