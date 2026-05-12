@@ -95,7 +95,9 @@ This preserves the rest of your config, including comments and provider sections
 
 - Windows
 - OpenAI Codex Desktop installed from the Microsoft Store
-- .NET 8 SDK for local builds
+- .NET 10 SDK for local builds
+
+The repository includes `global.json` to prefer the stable .NET 10 SDK line and roll forward to newer stable .NET 10 feature bands when available. Published Windows x64 builds are self-contained, so end users of the packaged EXE do not need to install a separate .NET runtime.
 
 ## Build
 
@@ -107,6 +109,12 @@ dotnet build .\\CodexProfileLauncher.csproj -c Release
 
 ```powershell
 dotnet run --project .\\CodexProfileLauncher.csproj
+```
+
+## Test
+
+```powershell
+dotnet run --project .\Tests\CodexProfileLauncher.Tests.csproj -c Release
 ```
 
 ## Publish as a single EXE
@@ -138,11 +146,13 @@ See [SUPPORT.md](SUPPORT.md).
 
 ## Project structure
 
+- `global.json` - pins the project to the stable .NET 10 SDK line with stable feature-band roll-forward
 - `MainForm.cs` - WinForms UI
 - `CodexConfigService.cs` - profile discovery and safe config writes
 - `CodexLauncherService.cs` - Codex process detection, launch, and restart
 - `CodexProfile.cs` - profile model
 - `CodexConfigSnapshot.cs` - parsed config state
+- `Tests/Program.cs` - lightweight regression test runner for config parsing and writes
 
 ## License
 
