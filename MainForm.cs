@@ -26,8 +26,8 @@ public sealed class MainForm : Form
         MaximizeBox = true;
         MinimizeBox = true;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(1160, 560);
-        MinimumSize = new Size(1120, 520);
+        ClientSize = new Size(520, 700);
+        MinimumSize = new Size(500, 560);
 
         var titleLabel = new Label
         {
@@ -40,7 +40,7 @@ public sealed class MainForm : Form
         _hintLabel = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(1100, 0),
+            MaximumSize = new Size(460, 0),
             Text = "Click a profile to save it as the active default and launch Codex with that profile, or add a new profile first.",
             Margin = new Padding(0, 0, 0, 14),
         };
@@ -48,7 +48,7 @@ public sealed class MainForm : Form
         _configPathLabel = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(1100, 0),
+            MaximumSize = new Size(460, 0),
             Margin = new Padding(0, 0, 0, 6),
         };
 
@@ -63,7 +63,7 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             ForeColor = Color.DarkGoldenrod,
-            MaximumSize = new Size(1100, 0),
+            MaximumSize = new Size(460, 0),
             Margin = new Padding(0, 0, 0, 12),
         };
 
@@ -86,8 +86,8 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             Margin = new Padding(0),
             Padding = new Padding(0),
         };
@@ -141,10 +141,10 @@ public sealed class MainForm : Form
         return new Button
         {
             AutoSize = false,
-            Width = 210,
+            Width = 420,
             Height = 36,
             Text = text,
-            Margin = new Padding(0, 0, 10, 12),
+            Margin = new Padding(0, 0, 0, 12),
         };
     }
 
@@ -363,15 +363,23 @@ public sealed class MainForm : Form
 
         if (availableWidth <= 0)
         {
-            return 680;
+            return 420;
         }
 
-        return Math.Max(560, availableWidth - 24);
+        return Math.Max(320, availableWidth - 24);
     }
 
     private void ResizeProfileButtons()
     {
         var buttonWidth = GetProfileButtonWidth();
+        var actionButtonWidth = Math.Max(320, ClientSize.Width - 72);
+
+        _addProfileButton.Width = actionButtonWidth;
+        _reloadButton.Width = actionButtonWidth;
+        _openConfigButton.Width = actionButtonWidth;
+        _openConfigFolderButton.Width = actionButtonWidth;
+        _copyConfigPathButton.Width = actionButtonWidth;
+
         foreach (var button in _buttonPanel.Controls.OfType<Button>())
         {
             button.Width = buttonWidth;

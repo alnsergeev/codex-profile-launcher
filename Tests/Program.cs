@@ -12,6 +12,7 @@ var tests = new (string Name, Action Test)[]
     ("Adds a new model provider section without dropping config", AddsModelProviderText),
     ("Rejects duplicate model provider keys when adding", RejectsDuplicateModelProviderKeys),
     ("Safely updates file and creates backup", SafelyUpdatesFileAndCreatesBackup),
+    ("Keeps only latest five backups", KeepsOnlyLatestFiveBackups),
     ("Creates config when adding a first profile", CreatesConfigWhenAddingFirstProfile),
     ("Creates config when adding a first model provider", CreatesConfigWhenAddingFirstModelProvider),
 };
@@ -277,6 +278,39 @@ static void CreatesConfigWhenAddingFirstProfile()
         Contains("profile = \"ollama\"", text);
         Contains("[profiles.ollama]", text);
         Contains("model_provider = \"remote_ollama\"", text);
+    }
+    finally
+    {
+        Directory.Delete(directory, recursive: true);
+    }
+}
+
+static void KeepsOnlyLatestFiveBackups()
+{
+    var directory = Path.Combine(Path.GetTempPath(), $"codex-profile-launcher-tests-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(directory);
+
+    try
+    {
+        var configPath = Path.Combine(directory, "config.toml");
+        File.WriteAllText(
+            configPath,
+            """
+            profile = "openai"
+
+            [profiles.openai]
+            model = "gpt-5.4"
+            """);
+
+        var service = new CodexConfigService(configPath);
+
+        for (var index = 0; index < 7; index++)
+        {
+            service.SetActiveProfile(index % 2 == 0 ? "openai" : "ollama");
+            Thread.Sleep(1200);
+        }
+
+        Equal(5, Directory.GetFiles(directory, "config.toml.*.bak").Length);
     }
     finally
     {

@@ -5,6 +5,7 @@ namespace CodexProfileLauncher;
 
 public sealed class CodexConfigService
 {
+    private const int MaxBackupFiles = 5;
     private static readonly Regex SectionRegex = new(@"^\s*\[\s*([^\]]+?)\s*\]\s*$", RegexOptions.Compiled);
     private static readonly Regex KeyValueRegex = new(@"^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$", RegexOptions.Compiled);
     private static readonly Regex ProfileKeyRegex = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled);
@@ -335,6 +336,7 @@ public sealed class CodexConfigService
         try
         {
             File.Replace(tempPath, _configPath, backupPath, ignoreMetadataErrors: true);
+            TrimOldBackups(directory);
         }
         catch
         {
@@ -344,6 +346,25 @@ public sealed class CodexConfigService
             }
 
             throw;
+        }
+    }
+
+    private void TrimOldBackups(string directory)
+    {
+        var backupFiles = Directory.GetFiles(directory, "config.toml.*.bak")
+            .OrderByDescending(path => File.GetLastWriteTimeUtc(path))
+            .ToList();
+
+        foreach (var oldBackupPath in backupFiles.Skip(MaxBackupFiles))
+        {
+            try
+            {
+                File.Delete(oldBackupPath);
+            }
+            catch
+            {
+                // Ignore cleanup issues so config update still succeeds.
+            }
         }
     }
 
